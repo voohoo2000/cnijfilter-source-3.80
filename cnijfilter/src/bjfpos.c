@@ -79,11 +79,10 @@ short bjf_pos_set_prnYres( LPBJF_POS_PRNINFO, double );
 short bjf_pos_set_prnwidth( LPBJF_POS_PRNINFO, long );
 short bjf_pos_set_prnheight( LPBJF_POS_PRNINFO, long );
 
-static short check_imagesize( double, double, double, double );
 static long round_up( double );
 
 
-
+#if 0
 static short check_imagesize( double defwidth, double defheight, double inwidth, double inheight )
 {
 	short result = 0;
@@ -96,7 +95,7 @@ static short check_imagesize( double defwidth, double defheight, double inwidth,
 
 	return result;
 }
-
+#endif
 
 static long round_up( double target )
 {
@@ -570,7 +569,6 @@ short ImageCenter(
 )
 {
 	long				img_width,img_height;
-	double				img_xresolution, img_yresolution;
 	double				prn_xresolution, prn_yresolution;
 	double				prnarea_width, prnarea_height;
 	double				prn_width, prn_height;
@@ -583,10 +581,6 @@ short ImageCenter(
 	/*--- target image data [pixel] ---*/
 	img_width = lpimginfo->img_width;
 	img_height = lpimginfo->img_height;
-
-	/*--- image resolution [dpi] ---*/
-	img_xresolution = lpimginfo->xresolution;
-	img_yresolution = lpimginfo->yresolution;
 
 	/*--- printer resolution [dpi] ---*/
 	prn_xresolution = lpprninfo->prn_xresolution;

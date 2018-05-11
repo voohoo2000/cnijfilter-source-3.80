@@ -83,11 +83,6 @@ static short dumpPluralPages( LPBJF_ROOT root, int prn );
 static short dumpPluralPages_flush( LPBJF_ROOT root, int prn );
 static short dumpPluralPages_flush_duplex( LPBJF_ROOT root, int prn );
 /* testprint function */
-static short exec_testprint( char *command , long cmdslen , char *filename , int prn);
-static long get_file_bytes( char *filename );
-
-
-static int createInputfile( char name );
 
 static short modify_image_form( LPBJFILTERINFO lpbjinfo , int isDuplex, int pageNum );
 static short output_blank_page( CNCLPtr , int , int , LPBJF_ROOT );
@@ -126,19 +121,13 @@ int main( int argc, char *argv[] )
 	CNCLPAPERSIZE   	cnclpapersize;
 	BJFLTCOLORSYSTEM	bjfltcolor;
 	LPBJFILTERINFO		lpbjinfo = NULL;
-	IPCU				ipc;
-	short				ret;
 	char				socketname[256];
 	short				modelstrnum,i;
 	char				dispname[256];
-	char				modelname[256];
 	char				tmp_modelname[256],small_modelname[256];
-	char				*bsccdata = NULL;
 	FILE				*fp = NULL;
 	char				confname[256];
 	short				id = 0;
-	short				testprint_ret;
-	DATA_INFO			data_info;
 	short				return_code = 1;
 
 #if DEBUGLOG
@@ -161,7 +150,6 @@ int main( int argc, char *argv[] )
 			&bjfltdevice, &cnclpapersize, dispname, lpbjinfo->filename, tmp_modelname )) < 0 ) goto onErr;
 
 
-	for( i=0; i<sizeof(tmp_modelname); i++ )	modelname[i] = tmp_modelname[i];
 	for( i=0; i<sizeof(small_modelname); i++ )	small_modelname[i] = tolower(tmp_modelname[i]);
 
 	/*---------
@@ -243,20 +231,17 @@ static short MakeBJPrintData
 	long				ImageHeight;
 	long				topskip;
 	long				page_width;
-	long				i;
 	short				bpp;
 
 	CNCLNAMEINFO		cnclnameinfo;
 	BJFLTCOMSYSTEM		bjfltcom;
 	char 				tblPath[] = BJLIBPATH;
-	FILE				*fp=NULL;
-	CPKInt16			result;
 	char				*tmp_filename = NULL;
 	short				rev_flag = 0;
 	CIFRASTERINFO		CifRasterInfo;
 	int					f_input = -1;
 	LPBJF_ROOT			root = NULL;
-	int					fd;
+	int					fd = 0;
 	short				dumpp_ret;
 	BJFLTOVERMARGININFO	bjfltovermargin;
 	char		command_buffer[CNCL_MAKECOMMAND_BUF_LEN];
@@ -671,7 +656,9 @@ finish3:
 		removeTempfileCompletely(root);
 	}
 
+#if 0
 finish2:
+#endif
 	/****** CNCL End job ******/
 	if ( (cnclerr = CNCL_EndJob( &CnclData )) == CNCL_OK ) {
 		outCmd( CnclData.outputBuffer, CnclData.outputSize, lpbjinfo->prn );
@@ -1329,7 +1316,6 @@ static short dumpPage(LPBJF_NODE node, int prn)
 	}
 	ret = node->curCopies;
 
-onErr:
 	if(fd>0)close(fd);
 	return ret;
 }
@@ -1501,43 +1487,6 @@ onErr:
 
 
 /*-------------------------------------------------------------*/
-/* write testprint pattern.                                    */
-/*-------------------------------------------------------------*/
-static short exec_testprint( char *command , long cmdslen , char *filename , int prn)
-{
-	CPKByte	buf[BUFSIZ];
-	int		fd = 0;
-	int		r_size = 0;
-	short	ret = -1;
-
-
-	/* open testpattern file */
-	if ( (fd = open( filename, O_RDONLY )) < 0 ){
-		/* perror( "open" ); */
-		return -2;
-	}
-
-	/* send BJL to LM */
-	outCmd( (CPKByte CPKPTR)command, (CPKUInt32)cmdslen, prn );
-
-	/* read testpattern file and write to LM */
-	while ( (r_size = read( fd, buf, BUFSIZ)) > 0 ){
-
-		outCmd( buf, r_size, prn );  /* write( prn, buf, r_size ); */
-	}
-
-	ret = 0;
-
-onErr:
-	if(fd>0)close(fd);
-	return ret;
-
-
-}
-
-
-
-/*-------------------------------------------------------------*/
 /* modify image size and location.                             */
 /*-------------------------------------------------------------*/
 static short modify_image_form( LPBJFILTERINFO lpbjinfo , int isDuplex, int pageNum )
@@ -1673,7 +1622,6 @@ static short process_raster_data( LPCIFRASTERINFO lpCifRasterInfo , LPBJFILTERIN
 	CPKUInt16			current_page = 0;
 	long				page_width;
 	short				bpp;
-	long				topskip = 0;
 	CNCLPtr				lpCnclData;
 	int					fd;
 
@@ -1684,7 +1632,6 @@ static short process_raster_data( LPCIFRASTERINFO lpCifRasterInfo , LPBJFILTERIN
 	page_width		= lpCifRasterInfo->page_width;
 	width			= lpCifRasterInfo->width;
 	height			= lpCifRasterInfo->height;
-	topskip			= lpCifRasterInfo->top_skip;
 	bpp				= lpCifRasterInfo->bpp;
 	rev_flag		= lpCifRasterInfo->rev_flag;
 	current_page	= lpCifRasterInfo->page;
@@ -1866,13 +1813,11 @@ onErr:
 /*-------------------------------------------------------------*/
 static short flush_raster_data( CNCLPtr lpCnclData , LPBJFILTERINFO lpbjinfo , int fd , LPBJF_ROOT root )
 {
-	long				restLines, tmpRestLines;
 	short				result;
 	long				i;
 	CNCLErr				cnclerr = -1;
 	short				ret = -1;
 
-	restLines = 1;
 	do {
 		/****** Data out ******/
 		result = CNCL_FlushData( lpCnclData );
@@ -1900,21 +1845,6 @@ onErr:
 
 
 }
-
-/*-------------------------------------------------------------*/
-/* obtain the total file byte size.                            */
-/*-------------------------------------------------------------*/
-static long get_file_bytes( char *filename )
-{
-	struct stat stat_buf;
-
-	if( stat( filename, &stat_buf ) == 0 )
-		return (long)stat_buf.st_size;
-	else
-		return -1;
-}
-
-
 
 #if DEBUGLOG
 
